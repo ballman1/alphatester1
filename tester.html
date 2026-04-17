@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alphapointe — Voice Issue Logger</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f8fafc; --bg3: #f1f5f9;
+    --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+    --border: rgba(15,23,42,0.12); --border2: rgba(15,23,42,0.22);
+    --navy: #1B3A6B; --teal: #0F766E; --blue: #185FA5; --blue-lt: #E6F1FB;
+    --green: #3B6D11; --green-lt: #DCFCE7;
+    --amber: #854F0B; --amber-lt: #FEF3C7;
+    --red: #A32D2D; --red-lt: #FCEBEB;
+    --plum: #3C3489; --plum-lt: #EEEDFE;
+    --radius: 8px; --radius-lg: 12px;
+    --mono: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+    --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e2433; --bg2: #252c3d; --bg3: #1a1f2e;
+      --text: #f1f5f9; --text2: #94a3b8; --text3: #64748b;
+      --border: rgba(241,245,249,0.1); --border2: rgba(241,245,249,0.2);
+      --blue-lt: #0c2a4a; --green-lt: #0f2e0a; --amber-lt: #2d1f05; --red-lt: #2d0a0a; --plum-lt: #1a1640;
+    }
+  }
+  body {
+    font-family: var(--sans); font-size: 14px;
+    background: var(--bg3); color: var(--text);
+    min-height: 100vh; padding: 1rem;
+  }
+  h1.app-title {
+    font-size: 17px; font-weight: 600; color: var(--navy);
+    margin-bottom: 0; line-height: 1.3;
+  }
+  .subtitle { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .app-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;
+  }
+  .shell {
+    display: grid; grid-template-columns: 1fr 340px;
+    gap: 0; border: 0.5px solid var(--border2);
+    border-radius: var(--radius-lg); overflow: hidden;
+    background: var(--bg); max-width: 980px; margin: 0 auto;
+    min-height: 580px;
+  }
+  @media (max-width: 700px) { .shell { grid-template-columns: 1fr; } }
+  .left-panel {
+    background: var(--bg); padding: 1.25rem;
+    border-right: 0.5px solid var(--border);
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .right-panel {
+    background: var(--bg2); padding: 1rem;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    overflow-y: auto; max-height: 580px;
+  }
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: var(--radius);
+    border: 0.5px solid var(--border); background: var(--bg2);
+  }
+  .rec-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #E24B4A; flex-shrink: 0;
+  }
+  .rec-dot.pulse { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.25 } }
+  .status-text { font-size: 13px; font-weight: 500; color: var(--text); }
+  .time-badge {
+    font-size: 12px; color: var(--text2); margin-left: auto;
+    font-variant-numeric: tabular-nums; font-family: var(--mono);
+  }
+  .mic-area {
+    border: 1.5px dashed var(--border2); border-radius: var(--radius-lg);
+    padding: 1.25rem; display: flex; flex-direction: column;
+    gap: 10px; transition: border-color .2s, background .2s;
+  }
+  .mic-area.active { border-color: var(--blue); background: var(--blue-lt); }
+  .section-label {
+    font-size: 11px; font-weight: 500; color: var(--text3);
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+  .transcript-box {
+    min-height: 52px; font-size: 14px; color: var(--text);
+    line-height: 1.6; padding: 8px 10px; background: var(--bg);
+    border-radius: var(--radius); border: 0.5px solid var(--border);
+  }
+  .transcript-box.placeholder { color: var(--text3); font-style: italic; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    cursor: pointer; font-family: var(--sans);
+    border-radius: var(--radius); font-size: 13px;
+    padding: 6px 14px; border: 0.5px solid var(--border2);
+    background: transparent; color: var(--text);
+    transition: background .15s; line-height: 1.4;
+  }
+  button:hover { background: var(--bg2); }
+  button:active { transform: scale(.97); }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-primary:hover { background: #0C447C; }
+  .btn-danger { background: #E24B4A; color: #fff; border-color: #E24B4A; }
+  .btn-danger:hover { background: var(--red); }
+  .btn-success { background: var(--green); color: #fff; border-color: var(--green); }
+  .btn-success:hover { background: #27500A; }
+  .shortcut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .shortcut-card {
+    padding: 8px 10px; border-radius: var(--radius);
+    background: var(--bg2); border: 0.5px solid var(--border);
+  }
+  .shortcut-key { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--blue); }
+  .shortcut-desc { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .voice-cmd-ref { background: var(--bg2); border-radius: var(--radius); padding: 8px 10px; }
+  .cmd-item { font-size: 12px; color: var(--text2); padding: 4px 0; border-bottom: 0.5px solid var(--border); }
+  .cmd-item:last-child { border-bottom: none; }
+  .cmd-item code { font-family: var(--mono); font-size: 11px; color: var(--blue); }
+  textarea, input[type="text"] {
+    width: 100%; font-family: var(--sans); font-size: 13px;
+    padding: 8px 10px; border-radius: var(--radius);
+    border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text); resize: none; line-height: 1.5;
+  }
+  textarea:focus, input[type="text"]:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+  select {
+    font-family: var(--sans); font-size: 13px; padding: 5px 8px;
+    border-radius: var(--radius); border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text);
+  }
+  .feedback {
+    font-size: 12px; padding: 6px 10px;
+    border-radius: var(--radius); font-weight: 500;
+    display: none; margin-top: 2px;
+  }
+  .feedback.ok { background: var(--green-lt); color: var(--green); display: block; }
+  .feedback.err { background: var(--red-lt); color: var(--red); display: block; }
+  .issue-card {
+    background: var(--bg); border-radius: var(--radius);
+    border: 0.5px solid var(--border); padding: 10px 12px;
+    flex-shrink: 0;
+  }
+  .issue-id { font-size: 10px; font-weight: 500; color: var(--text3); margin-bottom: 4px; font-family: var(--mono); }
+  .issue-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .sev-badge {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 2px 7px; border-radius: 3px; margin-top: 6px;
+  }
+  .sev-critical { background: var(--red-lt); color: var(--red); }
+  .sev-high     { background: var(--amber-lt); color: var(--amber); }
+  .sev-medium   { background: var(--blue-lt); color: var(--blue); }
+  .sev-low      { background: var(--green-lt); color: var(--green); }
+  .sc-tag {
+    display: inline-block; font-size: 10px; padding: 2px 6px;
+    border-radius: 3px; background: var(--plum-lt); color: var(--plum);
+    margin-left: 4px; font-family: var(--mono);
+  }
+  .ts { font-size: 10px; color: var(--text3); margin-top: 5px; font-family: var(--mono); }
+  .empty-state { color: var(--text3); font-size: 13px; text-align: center; padding: 2rem 0; font-style: italic; }
+  .right-footer { border-top: 0.5px solid var(--border); padding-top: 10px; display: flex; gap: 8px; margin-top: auto; flex-shrink: 0; }
+  .manual-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div>
+    <h1 class="app-title">Alphapointe — Voice Issue Logger</h1>
+    <p class="subtitle">Keyboard & voice-driven accessibility testing log for blind testers · AACP v1.0</p>
+  </div>
+</div>
+
+<main>
+  <div class="shell" role="main">
+
+    <div class="left-panel">
+
+      <div class="status-bar" role="status" aria-live="polite">
+        <div class="rec-dot pulse" id="recDot" aria-hidden="true"></div>
+        <span class="status-text" id="statusText">Ready — session started</span>
+        <span class="time-badge" id="timer" aria-label="Elapsed time">00:00</span>
+      </div>
+
+      <div class="mic-area" id="micArea">
+        <span class="section-label" id="voiceLabel">Voice input</span>
+        <div class="transcript-box placeholder" id="transcript"
+             role="log" aria-live="polite" aria-label="Voice transcript">
+          Say a command or press Space to dictate...
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="startBtn" onclick="startListening()"
+                  aria-keyshortcuts="Space">
+            Start listening (Space)
+          </button>
+          <button id="stopBtn" onclick="stopListening()"
+                  style="display:none" aria-keyshortcuts="Space">
+            Stop listening (Space)
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label" style="margin-bottom:8px">Keyboard shortcuts</div>
+        <div class="shortcut-grid" role="list" aria-label="Keyboard shortcuts">
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">Space</div>
+            <div class="shortcut-desc">Start / stop voice</div>
+          </div>
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">C</div>
+            <div class="shortcut-desc">Log Critical issue</div>
+          </div>
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">H</div>
+            <div class="shortcut-desc">Log High issue</div>
+          </div>
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">M</div>
+            <div class="shortcut-desc">Log Medium issue</div>
+          </div>
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">L</div>
+            <div class="shortcut-desc">Log Low issue</div>
+          </div>
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">Esc</div>
+            <div class="shortcut-desc">Cancel / clear</div>
+          </div>
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">Enter</div>
+            <div class="shortcut-desc">Confirm manual entry</div>
+          </div>
+          <div class="shortcut-card" role="listitem">
+            <div class="shortcut-key">E</div>
+            <div class="shortcut-desc">Export CSV</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label" style="margin-bottom:8px">Voice command syntax</div>
+        <div class="voice-cmd-ref" role="list" aria-label="Voice command reference">
+          <div class="cmd-item" role="listitem"><code>"critical [description]"</code> — log Critical</div>
+          <div class="cmd-item" role="listitem"><code>"high [description]"</code> — log High</div>
+          <div class="cmd-item" role="listitem"><code>"medium [description]"</code> — log Medium</div>
+          <div class="cmd-item" role="listitem"><code>"low [description]"</code> — log Low</div>
+          <div class="cmd-item" role="listitem"><code>"wcag [number]"</code> — tag last issue</div>
+          <div class="cmd-item" role="listitem"><code>"pass"</code> — mark current criterion pass</div>
+          <div class="cmd-item" role="listitem"><code>"note [text]"</code> — add general note</div>
+          <div class="cmd-item" role="listitem"><code>"undo"</code> — remove last entry</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="section-label">Manual quick-log</div>
+        <textarea id="manualText" rows="2"
+                  placeholder="Describe the barrier in plain language..."
+                  aria-label="Barrier description"></textarea>
+        <div class="manual-row">
+          <label for="sevSelect" class="section-label" style="text-transform:none;letter-spacing:0">Severity:</label>
+          <select id="sevSelect" aria-label="Severity level">
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <label for="scInput" class="section-label" style="text-transform:none;letter-spacing:0">WCAG SC:</label>
+          <input type="text" id="scInput" placeholder="e.g. 1.1.1"
+                 style="width:90px" aria-label="WCAG success criterion number">
+          <button class="btn-success" onclick="logManual()">Log (Enter)</button>
+        </div>
+        <div class="feedback" id="feedback" role="alert" aria-live="assertive"></div>
+      </div>
+
+    </div>
+
+    <div class="right-panel" id="rightPanel">
+      <div class="section-label">
+        Issue log — <span id="issueCount">0</span> entries
+      </div>
+      <div id="issueList" role="log" aria-live="polite" aria-label="Issue log"
+           style="display:flex;flex-direction:column;gap:8px">
+        <div class="empty-state">No issues logged yet.<br>Use voice commands or keyboard shortcuts.</div>
+      </div>
+      <div class="right-footer">
+        <button onclick="exportCSV()" style="flex:1" aria-keyshortcuts="e">Export CSV (E)</button>
+        <button onclick="copyJSON()" style="flex:1">Copy JSON</button>
+        <button onclick="clearAll()" class="btn-danger" style="flex:1">Clear all</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const issues = [];
+let issueSeq = 1;
+let listening = false;
+let recognition = null;
+let pendingText = '';
+let startTime = Date.now();
+
+const $ = id => document.getElementById(id);
+
+setInterval(() => {
+  const s = Math.round((Date.now() - startTime) / 1000);
+  $('timer').textContent = pad(Math.floor(s/60)) + ':' + pad(s%60);
+}, 1000);
+
+function pad(n) { return String(n).padStart(2,'0'); }
+function nowTS() {
+  const s = Math.round((Date.now() - startTime) / 1000);
+  return pad(Math.floor(s/60)) + ':' + pad(s%60);
+}
+
+function logIssue(description, severity, sc) {
+  const ts = nowTS();
+  const id = 'AP-' + String(issueSeq++).padStart(3,'0');
+  issues.push({ id, description, severity: severity.toLowerCase(), sc: sc || '', ts });
+  renderIssues();
+  showFeedback('Logged: ' + id + ' (' + severity.toUpperCase() + ')', 'ok');
+  $('issueCount').textContent = issues.length;
+  const p = $('rightPanel');
+  setTimeout(() => { p.scrollTop = p.scrollHeight; }, 50);
+}
+
+function renderIssues() {
+  const list = $('issueList');
+  if (!issues.length) {
+    list.innerHTML = '<div class="empty-state">No issues logged yet.<br>Use voice commands or keyboard shortcuts.</div>';
+    return;
+  }
+  list.innerHTML = issues.map(i => `
+    <article class="issue-card">
+      <div class="issue-id" aria-label="Issue ID">${i.id}</div>
+      <div class="issue-text">${escHtml(i.description)}</div>
+      <div>
+        <span class="sev-badge sev-${i.severity}" aria-label="Severity: ${i.severity}">${i.severity.toUpperCase()}</span>
+        ${i.sc ? `<span class="sc-tag" aria-label="WCAG ${i.sc}">WCAG ${i.sc}</span>` : ''}
+      </div>
+      <div class="ts" aria-label="Logged at ${i.ts}">@ ${i.ts}</div>
+    </article>
+  `).join('');
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showFeedback(msg, type) {
+  const el = $('feedback');
+  el.textContent = msg;
+  el.className = 'feedback ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'feedback'; }, 3000);
+}
+
+function logManual() {
+  const txt = $('manualText').value.trim();
+  const sev = $('sevSelect').value;
+  const sc  = $('scInput').value.trim();
+  if (!txt) { showFeedback('Enter a description first', 'err'); return; }
+  logIssue(txt, sev, sc);
+  $('manualText').value = '';
+  $('scInput').value = '';
+}
+
+function processVoiceCommand(text) {
+  const t = text.toLowerCase().trim();
+  const ts = $('transcript');
+  ts.classList.remove('placeholder');
+  ts.textContent = text;
+
+  const sevWords = ['critical','high','medium','low'];
+  for (const sev of sevWords) {
+    if (t.startsWith(sev + ' ')) {
+      const desc = text.slice(sev.length + 1).trim();
+      if (desc) { logIssue(desc, sev, ''); return; }
+    }
+    if (t === sev) {
+      pendingText = sev + '_pending';
+      ts.textContent = 'Ready for ' + sev + ' description — speak now';
+      $('sevSelect').value = sev;
+      return;
+    }
+  }
+
+  if (t.startsWith('wcag ')) {
+    const sc = t.replace('wcag ','').trim();
+    if (issues.length) {
+      issues[issues.length-1].sc = sc;
+      renderIssues();
+      showFeedback('Tagged last issue: WCAG ' + sc, 'ok');
+    } else { showFeedback('No issues to tag', 'err'); }
+    return;
+  }
+  if (t === 'pass') { logIssue('Criterion passed — no barrier detected', 'low', ''); return; }
+  if (t.startsWith('note ')) { logIssue('[NOTE] ' + text.slice(5).trim(), 'low', ''); return; }
+  if (t === 'undo') {
+    if (issues.length) {
+      issues.pop(); issueSeq--;
+      renderIssues();
+      $('issueCount').textContent = issues.length;
+      showFeedback('Last entry removed', 'ok');
+    } else { showFeedback('Nothing to undo', 'err'); }
+    return;
+  }
+
+  if (pendingText) {
+    const sev = pendingText.replace('_pending','');
+    logIssue(text, sev, '');
+    pendingText = '';
+    return;
+  }
+
+  ts.textContent = '"' + text + '" — not recognized. Try: high [description]';
+}
+
+function startListening() {
+  if (listening) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showFeedback('Voice API not supported in this browser — use manual entry', 'err');
+    return;
+  }
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    const ts = $('transcript');
+    ts.classList.remove('placeholder');
+    ts.textContent = final || interim || '...';
+    if (final) processVoiceCommand(final.trim());
+  };
+
+  recognition.onstart = () => {
+    listening = true;
+    $('micArea').classList.add('active');
+    $('startBtn').style.display = 'none';
+    $('stopBtn').style.display  = 'block';
+    $('statusText').textContent = 'Listening...';
+    $('recDot').classList.add('pulse');
+  };
+  recognition.onend   = () => stopListening();
+  recognition.onerror = () => { stopListening(); showFeedback('Voice error — use manual entry', 'err'); };
+  recognition.start();
+}
+
+function stopListening() {
+  if (recognition) { try { recognition.stop(); } catch(e) {} }
+  listening = false;
+  $('micArea').classList.remove('active');
+  $('startBtn').style.display = 'block';
+  $('stopBtn').style.display  = 'none';
+  $('statusText').textContent = 'Ready — session running';
+  $('recDot').classList.add('pulse');
+}
+
+document.addEventListener('keydown', (e) => {
+  const tag = document.activeElement.tagName;
+  if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
+
+  if (e.key === ' ') {
+    e.preventDefault();
+    listening ? stopListening() : startListening();
+  } else if (e.key === 'Escape') {
+    stopListening();
+    pendingText = '';
+    const ts = $('transcript');
+    ts.textContent = 'Say a command or press Space to dictate...';
+    ts.classList.add('placeholder');
+  } else if (e.key === 'Enter') {
+    logManual();
+  } else if (e.key.toLowerCase() === 'e' && !e.ctrlKey && !e.metaKey) {
+    exportCSV();
+  } else {
+    const sev = { c:'critical', h:'high', m:'medium', l:'low' }[e.key.toLowerCase()];
+    if (sev && !listening) {
+      pendingText = sev + '_pending';
+      const ts = $('transcript');
+      ts.classList.remove('placeholder');
+      ts.textContent = 'Ready for ' + sev + ' issue — speak (Space) or type below';
+      $('sevSelect').value = sev;
+      $('manualText').focus();
+    }
+  }
+});
+
+function exportCSV() {
+  if (!issues.length) { showFeedback('No issues to export', 'err'); return; }
+  const rows = [['Issue ID','Severity','WCAG SC','Timestamp','Description']];
+  issues.forEach(i => rows.push([
+    i.id, i.severity, i.sc, i.ts,
+    '"' + i.description.replace(/"/g,'""') + '"'
+  ]));
+  const csv = rows.map(r => r.join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'alphapointe_issues_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showFeedback('Exported ' + issues.length + ' issues as CSV', 'ok');
+}
+
+function copyJSON() {
+  if (!issues.length) { showFeedback('No issues to copy', 'err'); return; }
+  const payload = {
+    session: { exported: new Date().toISOString(), total: issues.length },
+    issues
+  };
+  navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+    .then(() => showFeedback('JSON copied to clipboard', 'ok'))
+    .catch(() => showFeedback('Clipboard unavailable — try Export CSV', 'err'));
+}
+
+function clearAll() {
+  if (issues.length && !confirm('Clear all ' + issues.length + ' logged issues? This cannot be undone.')) return;
+  issues.length = 0; issueSeq = 1;
+  renderIssues();
+  $('issueCount').textContent = 0;
+  showFeedback('Log cleared', 'ok');
+}
+</script>
+</body>
+</html>
